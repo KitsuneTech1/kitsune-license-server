@@ -1,0 +1,26 @@
+[Unit]
+Description=Kitsune License Server
+After=network.target
+
+[Service]
+Type=simple
+User=kls
+Group=kls
+WorkingDirectory=/opt/kitsune-license-server
+EnvironmentFile=/opt/kitsune-license-server/.env
+ExecStart=/opt/kitsune-license-server/kls
+Restart=on-failure
+RestartSec=3
+
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/kitsune-license-server/data
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

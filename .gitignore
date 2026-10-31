@@ -1,0 +1,29 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Data / secrets
+*.db
+*.db-*
+.env
+.env.*
+data/
+keys/
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Rust
+/target
+**/*.rs.bk
+data/
+
+# tooling junk
+tools/asciigen/__pycache__/
+tools/asciigen/dl/
+.demo/

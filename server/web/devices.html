@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your activated devices</title>
+<style>
+  :root{font-family:'Segoe UI',system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f4f0e7;color:#1a1712;padding:28px 18px}
+  .wrap{max-width:680px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#6f6557;font-size:13px;margin:0 0 18px}
+  .lookup{display:flex;gap:8px;margin-bottom:18px}
+  input{flex:1;border:1px solid #d8cfbd;border-radius:8px;padding:10px 12px;font:inherit;
+    font-family:'Cascadia Code',Consolas,monospace}
+  button{background:#c14a28;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;background:#fff;border:1px solid #e6ddcb;border-radius:12px;
+    padding:14px 16px;margin-bottom:14px}
+  .meta div{font-size:13px} .meta b{display:block;font-size:18px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6ddcb;border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #efe7d6;font-size:13px}
+  th{background:#efe7d6;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6f6557}
+  tr:last-child td{border-bottom:0}
+  .pill{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600}
+  .pill.active{background:#dff3e1;color:#2f7d3c} .pill.revoked{background:#fbe1da;color:#b23c25}
+  .err{color:#b23c25;font-size:13px} .note{color:#6f6557;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Your activated devices</h1>
+  <p class="sub">Enter your license key to see where it's currently in use. This view is read-only.</p>
+  <div class="lookup">
+    <input id="key" placeholder="KTSN-XXXX-XXXX-XXXX-XXXX">
+    <button id="go">View</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div id="out"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const fmt=ts=>ts?new Date(ts*1000).toLocaleString():'—';
+const params=new URLSearchParams(location.search);
+if(params.get('key')){ $('#key').value=params.get('key'); }
+
+$('#go').onclick=load;
+$('#key').addEventListener('keydown',e=>{ if(e.key==='Enter') load(); });
+if($('#key').value) load();
+
+async function load(){
+  $('#err').textContent=''; $('#out').innerHTML='';
+  const key=$('#key').value.trim(); if(!key) return;
+  let d;
+  try{
+    const r=await fetch('/devices',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key})});
+    d=await r.json();
+    if(!r.ok) throw new Error(d.message||'lookup failed');
+  }catch(e){ $('#err').textContent=e.message; return; }
+  const exp = d.expires_at ? fmt(d.expires_at) : 'never';
+  let rows = (d.devices||[]).map(a=>`<tr>
+      <td>${a.os||'—'}</td><td>${a.hostname||'—'}</td><td>${a.app_version||'—'}</td>
+      <td>${fmt(a.activated_at)}</td><td>${fmt(a.last_seen)}</td>
+      <td><span class="pill ${a.status==='active'?'active':'revoked'}">${a.status}</span></td>
+    </tr>`).join('');
+  if(!rows) rows='<tr><td colspan="6" class="note">No devices activated yet.</td></tr>';
+  $('#out').innerHTML=`
+    <div class="meta">
+      <div>Product<b>${d.product}</b></div>
+      <div>Seats<b>${d.seats_used}/${d.seat_limit}</b></div>
+      <div>License<b>${d.key_status}</b></div>
+      <div>Expires<b style="font-size:14px">${exp}</b></div>
+    </div>
+    <table><thead><tr><th>OS</th><th>Hostname</th><th>Version</th><th>Activated</th><th>Last seen</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+</script>
+</body>
+</html>
