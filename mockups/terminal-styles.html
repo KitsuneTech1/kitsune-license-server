@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitsune License Activator — Pick a Terminal Style</title>
+<style>
+  :root { font-family: 'Segoe UI', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #15110d;
+    color: #f4f0e7;
+    padding: 40px 24px 80px;
+    line-height: 1.5;
+  }
+  header { max-width: 1100px; margin: 0 auto 36px; }
+  h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.5px; }
+  h1 .fox { color: #c14a28; }
+  header p { color: #b8ae9c; max-width: 720px; margin: 0; }
+  .grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: #1c1812; border: 1px solid #322a20; border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .card:hover { transform: translateY(-3px); border-color: #c14a28; }
+  .card .meta { padding: 14px 18px; display: flex; justify-content: space-between; align-items: baseline; }
+  .card .meta .name { font-weight: 700; font-size: 16px; }
+  .card .meta .pick { font-size: 12px; color: #8c8col; }
+  .card .meta .num {
+    background: #c14a28; color: #fff; font-size: 12px; font-weight: 700;
+    border-radius: 999px; padding: 3px 10px;
+  }
+  .card .desc { padding: 0 18px 14px; color: #b8ae9c; font-size: 13px; }
+
+  /* Generic terminal window chrome */
+  .term {
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.45; padding: 0; margin: 0 18px 18px;
+    border-radius: 10px; overflow: hidden; min-height: 320px;
+    display: flex; flex-direction: column;
+  }
+  .titlebar { display: flex; align-items: center; gap: 7px; padding: 9px 12px; font-size: 11px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .titlebar .t { margin-left: 8px; opacity: .7; }
+  .screen { padding: 14px 16px; flex: 1; white-space: pre; overflow: hidden; }
+  .fox-art { white-space: pre; line-height: 1.05; font-size: 13px; }
+  .blink { animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 0%,92% { opacity:1 } 93%,100% { opacity:0 } }
+  .cursor { animation: curs 1s steps(1) infinite; }
+  @keyframes curs { 50% { opacity: 0 } }
+  .prog { display:inline-block; }
+
+  /* ---- Style 1: Classic Green Hacker ---- */
+  .s1 { background:#000; color:#33ff66; }
+  .s1 .titlebar { background:#0a0f0a; color:#33ff66; }
+  .s1 .dot.r{background:#1f3a23}.s1 .dot.y{background:#2a4a2c}.s1 .dot.g{background:#33ff66}
+  .s1 .accent { color:#aaffbb; }
+  .s1 .dim { color:#1f9c45; }
+
+  /* ---- Style 2: Warm Kitsune (brand) ---- */
+  .s2 { background:#1a140f; color:#f0e6d6; }
+  .s2 .titlebar { background:#251c14; color:#c8b89c; }
+  .s2 .dot.r{background:#c14a28}.s2 .dot.y{background:#d9a441}.s2 .dot.g{background:#7a8c5a}
+  .s2 .accent { color:#e8943f; font-weight:700; }
+  .s2 .fox-art { color:#e8943f; }
+  .s2 .dim { color:#8c7c64; }
+  .s2 .ok { color:#9cc06a; }
+
+  /* ---- Style 3: Neon Cyberpunk ---- */
+  .s3 { background:#0d0820; color:#e6d6ff; }
+  .s3 .titlebar { background:#160d2e; color:#b89cff; }
+  .s3 .dot.r{background:#ff3d9a}.s3 .dot.y{background:#ffcc00}.s3 .dot.g{background:#00f0ff}
+  .s3 .accent { color:#00f0ff; text-shadow:0 0 8px #00f0ff; }
+  .s3 .fox-art { color:#ff3d9a; text-shadow:0 0 10px #ff3d9a88; }
+  .s3 .dim { color:#7a6ca8; }
+  .s3 .ok { color:#00f0ff; }
+
+  /* ---- Style 4: Minimal Mono ---- */
+  .s4 { background:#fafaf8; color:#1c1c1c; border:1px solid #e2e0da; }
+  .s4 .titlebar { background:#f0eeea; color:#888; border-bottom:1px solid #e2e0da; }
+  .s4 .dot.r{background:#e06b5a}.s4 .dot.y{background:#e0b84a}.s4 .dot.g{background:#7aa86a}
+  .s4 .accent { color:#c14a28; font-weight:700; }
+  .s4 .fox-art { color:#c14a28; }
+  .s4 .dim { color:#9a978f; }
+  .s4 .ok { color:#3f8f4f; }
+
+  footer { max-width:1100px; margin:40px auto 0; color:#8c8270; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kitsune License Activator <span class="fox">🦊</span> — pick a terminal style</h1>
+  <p>This is the look of the <strong>terminal installer</strong> your customers run. They paste a license key, it activates online against your server, and the install proceeds only if the key is valid. Each option below is animated (watch the fox blink + the progress fill). Tell me which number you want — or mix-and-match ("style 2 colors, style 1 fox").</p>
+</header>
+
+<div class="grid">
+
+  <!-- Style 1 -->
+  <div class="card">
+    <div class="meta"><span class="name">Classic Green</span><span class="num">1</span></div>
+    <div class="desc">Old-school hacker terminal. Green on black, matrix energy. Reads as "serious tooling."</div>
+    <div class="term s1">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">install.exe — license</span></div>
+      <div class="screen"><span class="fox-art" id="fox1"></span>
+<span class="dim">┌─────────────────────────────────────┐</span>
+<span class="dim">│</span>  YOUR PROGRAM  ::  ACTIVATION        <span class="dim">│</span>
+<span class="dim">└─────────────────────────────────────┘</span>
+
+ Enter license key:
+ <span class="accent">&gt; XXXX-XXXX-XXXX-<span class="cursor">█</span></span>
+
+ <span class="dim">[</span><span class="prog" id="bar1"></span><span class="dim">]</span> verifying...
+</div>
+    </div>
+  </div>
+
+  <!-- Style 2 -->
+  <div class="card">
+    <div class="meta"><span class="name">Warm Kitsune (brand)</span><span class="num">2</span></div>
+    <div class="desc">Matches your site — cream ink, rust + amber accents, friendly fox. On-brand and inviting.</div>
+    <div class="term s2">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">kitsune-activate</span></div>
+      <div class="screen"><span class="fox-art" id="fox2"></span>
+ <span class="accent">Kitsune Technologies</span> · license activation
+
+ <span class="dim">Paste your key to unlock the installer.</span>
+
+   key › <span class="accent">KTSN-7Q4F-9XZ2-<span class="cursor">▌</span></span>
+
+   <span id="bar2"></span> <span class="ok" id="ok2"></span>
+</div>
+    </div>
+  </div>
+
+  <!-- Style 3 -->
+  <div class="card">
+    <div class="meta"><span class="name">Neon Cyberpunk</span><span class="num">3</span></div>
+    <div class="desc">Glowing cyan/magenta, high energy. Great if the product itself is a game or edgy tool.</div>
+    <div class="term s3">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">~/activate</span></div>
+      <div class="screen"><span class="fox-art" id="fox3"></span>
+ <span class="accent">▰▰▰ LICENSE GATE ▰▰▰</span>
+
+ &gt; auth required to continue
+ &gt; enter key:
+
+   <span class="accent">█▒ NEON-4F2A-88QX-<span class="cursor">_</span></span>
+
+ <span class="dim">handshake</span> <span class="ok" id="bar3"></span>
+</div>
+    </div>
+  </div>
+
+  <!-- Style 4 -->
+  <div class="card">
+    <div class="meta"><span class="name">Minimal Mono</span><span class="num">4</span></div>
+    <div class="desc">Clean, light, lots of breathing room. Looks modern/professional; least "gamer".</div>
+    <div class="term s4">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">activate</span></div>
+      <div class="screen"><span class="fox-art" id="fox4"></span>
+  License activation
+
+  <span class="dim">Enter the key from your purchase email.</span>
+
+  key   <span class="accent">MONO-1A2B-3C4D-<span class="cursor">|</span></span>
+
+  <span class="dim">status</span>  <span class="ok" id="bar4"></span>
+</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Mockups only — final CLI will match whichever you pick. Reply with a number (1–4).</footer>
+
+<script>
+// Two-frame blink animation for a cute fox, per style.
+const foxOpen = [
+"   /\\___/\\",
+"  ( o   o )",
+"  (  =^=  )",
+"   (>   <)  "
+];
+const foxBlink = [
+"   /\\___/\\",
+"  ( -   - )",
+"  (  =^=  )",
+"   (>   <)  "
+];
+const foxes = ['fox1','fox2','fox3','fox4'].map(id => document.getElementById(id));
+let blinkState = false;
+function renderFoxes(){
+  const frame = (blinkState ? foxBlink : foxOpen).join("\n");
+  foxes.forEach(f => { if (f) f.textContent = frame + "\n"; });
+}
+renderFoxes();
+setInterval(() => {
+  blinkState = true; renderFoxes();
+  setTimeout(() => { blinkState = false; renderFoxes(); }, 160);
+}, 2600);
+
+// Animated progress fills
+function fillBar(el, total, fillChar, emptyChar, doneText, speed){
+  if(!el) return; let i = 0;
+  setInterval(() => {
+    i = (i + 1) % (total + 8);
+    const f = Math.min(i, total);
+    el.textContent = fillChar.repeat(f) + emptyChar.repeat(total - f);
+  }, speed);
+}
+fillBar(document.getElementById('bar1'), 22, '█', '░', '', 120);
+(function(){
+  const el = document.getElementById('bar2'), ok = document.getElementById('ok2');
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']; let i=0, t=0;
+  setInterval(()=>{ t++;
+    if(t % 40 < 30){ el.textContent = frames[i++ % frames.length] + ' checking license'; ok.textContent=''; }
+    else { el.textContent=''; ok.textContent='✓ activated — installing'; }
+  },90);
+})();
+(function(){
+  const el = document.getElementById('bar3');
+  setInterval(()=>{ const n = (Math.floor(Date.now()/120)%12); el.textContent = '▰'.repeat(n) + '▱'.repeat(12-n); },120);
+})();
+(function(){
+  const el = document.getElementById('bar4');
+  const seq=['· connecting','·· verifying','✓ valid — installing']; let i=0;
+  setInterval(()=>{ el.textContent = seq[i++ % seq.length]; },1100);
+})();
+</script>
+</body>
+</html>
