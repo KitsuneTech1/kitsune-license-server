@@ -10,13 +10,13 @@ Self-hosted software licensing: Ed25519-signed activation tokens, SQLite, an adm
 ## Features
 
 - **Online activation.** A client calls `/activate` with a license key and a device fingerprint. The server checks the key's status, expiry, and seat limit, records the activation, and returns a signed token.
-- **Ed25519-signed tokens.** Every activation and validation response is signed with the server's Ed25519 key. The client verifies the signature against an embedded public key, so a forged "valid" response or a fake server cannot pass.
+- **Ed25519-signed tokens.** Successful activation and validation responses include a token signed with the server's Ed25519 key. The client verifies the signature against an embedded public key, so a forged "valid" response or a fake server cannot pass.
 - **Hashed keys at rest.** License keys are stored as SHA-256 hashes, never in plaintext. A database leak does not expose usable keys.
 - **Seat limits, revocation, expiry.** Each key has a seat limit, an optional expiry, and can be revoked. Individual device activations can be revoked without touching the key itself.
 - **Admin web UI.** Create products, generate or import license keys, set seat limits and expiry, and view activations per key. Gated by a bearer token (deny-by-default if unset).
 - **Embeddable devices page.** A view-only page an end user can open with their own key to see their activated devices (OS, hostname, last seen, status). No secrets, no controls.
 - **Terminal activator.** A CLI (`ktsn-activate`) that prompts for a key, activates it, verifies the signature, and gates an install. Draws an animated ASCII fox while it works: typewriter draw-on, then an ember-to-gold shimmer sweeping down the art while the request is in flight.
-- **Runtime guard.** The client crate also exposes a `Guard` that runs in the background inside a protected program, periodically re-validates the license, and flips to "not entitled" the moment a key is revoked, a device is kicked, or the license expires. It keeps trusting a cached license through brief network outages, up to a configurable grace window, and self-enforces license expiry even fully offline.
+- **Runtime guard.** The client crate also exposes a `Guard` that runs in the background inside a protected program, periodically re-validates the license, and flips to "not entitled" on the next check after a key is revoked, a device is kicked, or the license expires. It keeps trusting a cached license through brief network outages, up to a configurable grace window, and self-enforces license expiry even fully offline.
 
 ## Architecture
 
@@ -88,8 +88,8 @@ This walks through building the project from nothing. It assumes you have never 
 
    You should see log lines like this:
    ```
-   INFO kitsune_license_server: server public key: Fo20vUMA4HPCdpxPEsccfPBSMExyXVoJhtouJ6bTRnw
-   INFO kitsune_license_server: listening on 0.0.0.0:8080
+   INFO kls: server public key: Fo20vUMA4HPCdpxPEsccfPBSMExyXVoJhtouJ6bTRnw
+   INFO kls: listening on 0.0.0.0:8080
    ```
    Copy the public key from that line, you'll need it in step 6. Leave this terminal running.
 
