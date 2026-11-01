@@ -81,7 +81,9 @@ pub async fn activate(
     Json(req): Json<ActivateReq>,
 ) -> Result<Json<ActivateResp>, AppError> {
     if req.device_fingerprint.trim().is_empty() {
-        return Err(AppError::BadRequest("device_fingerprint is required".into()));
+        return Err(AppError::BadRequest(
+            "device_fingerprint is required".into(),
+        ));
     }
     let key = lookup_key(&st, &req.key).await?;
     if key.status != "active" {
@@ -123,16 +125,15 @@ pub async fn activate(
             ));
         }
         None => {
-            if seats_used(&st, key.id).await? >= key.seat_limit {
-                return Err(AppError::Conflict(format!(
-                    "seat limit reached ({} of {})",
-                    key.seat_limit, key.seat_limit
-                )));
-            }
-            sqlx::query(
-                "INSERT INTO activations
+            // Keep the seat check and insert in one SQLite write statement. A
+            // separate COUNT followed by INSERT lets concurrent requests both
+            // observe a free seat and over-allocate it.
+            let inserted = sqlx::query(
+                "INSERT OR IGNORE INTO activations
                  (key_id, device_fingerprint, os, hostname, app_version, activated_at, last_seen, status)
-                 VALUES (?,?,?,?,?,?,?, 'active')",
+                 SELECT ?,?,?,?,?,?,?,'active'
+                 WHERE (SELECT COUNT(*) FROM activations
+                        WHERE key_id=? AND status='active') < ?",
             )
             .bind(key.id)
             .bind(&req.device_fingerprint)
@@ -141,12 +142,50 @@ pub async fn activate(
             .bind(&req.app_version)
             .bind(now)
             .bind(now)
+            .bind(key.id)
+            .bind(key.seat_limit)
             .execute(&st.pool)
             .await?;
+            if inserted.rows_affected() == 0 {
+                // A concurrent request for this same device may have won the
+                // insert. Preserve idempotent activation in that case; only
+                // report a full seat when no active row exists for the device.
+                let current = sqlx::query_as::<_, Activation>(
+                    "SELECT * FROM activations WHERE key_id=? AND device_fingerprint=?",
+                )
+                .bind(key.id)
+                .bind(&req.device_fingerprint)
+                .fetch_optional(&st.pool)
+                .await?;
+                if let Some(a) = current.filter(|a| a.status == "active") {
+                    sqlx::query(
+                        "UPDATE activations SET last_seen=?, os=?, hostname=?, app_version=? WHERE id=?",
+                    )
+                    .bind(now)
+                    .bind(&req.os)
+                    .bind(&req.hostname)
+                    .bind(&req.app_version)
+                    .bind(a.id)
+                    .execute(&st.pool)
+                    .await?;
+                } else {
+                    return Err(AppError::Conflict(format!(
+                        "seat limit reached ({} of {})",
+                        key.seat_limit, key.seat_limit
+                    )));
+                }
+            }
         }
     }
 
-    let (token, exp) = make_token(&st, key.id, &product, &req.device_fingerprint, now, key.expires_at);
+    let (token, exp) = make_token(
+        &st,
+        key.id,
+        &product,
+        &req.device_fingerprint,
+        now,
+        key.expires_at,
+    );
     Ok(Json(ActivateResp {
         token,
         public_key: st.public_key_b64.clone(),
@@ -230,8 +269,14 @@ pub async fn validate(
                 .bind(a.id)
                 .execute(&st.pool)
                 .await?;
-            let (token, exp) =
-                make_token(&st, key.id, &product, &req.device_fingerprint, now, key.expires_at);
+            let (token, exp) = make_token(
+                &st,
+                key.id,
+                &product,
+                &req.device_fingerprint,
+                now,
+                key.expires_at,
+            );
             Ok(Json(ValidateResp {
                 valid: true,
                 status: "active".into(),

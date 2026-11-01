@@ -117,7 +117,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let TOKEN = localStorage.getItem('kls_token') || '';
+let TOKEN = sessionStorage.getItem('kls_token') || '';
 let curProduct = null, curKey = null;
 
 function fmt(ts){ return ts ? new Date(ts*1000).toLocaleString() : '—'; }
@@ -137,7 +137,7 @@ async function api(method, path, body){
 $('#token').value = TOKEN;
 $('#connect').onclick = async () => {
   TOKEN = $('#token').value.trim();
-  localStorage.setItem('kls_token', TOKEN);
+  sessionStorage.setItem('kls_token', TOKEN);
   try { await loadProducts(); $('#app').classList.remove('hide'); setErr(''); }
   catch(e){ setErr(e.message); }
 };
@@ -145,12 +145,21 @@ if(TOKEN){ $('#connect').click(); }
 
 async function loadProducts(){
   const prods = await api('GET','/api/products');
-  const el = $('#products'); el.innerHTML = '';
-  if(!prods.length) el.innerHTML = '<span class="note">No products yet — create one below.</span>';
+  const el = $('#products'); el.replaceChildren();
+  if(!prods.length){
+    const empty = document.createElement('span');
+    empty.className = 'note';
+    empty.textContent = 'No products yet — create one below.';
+    el.appendChild(empty);
+  }
   prods.forEach(p => {
     const d = document.createElement('span');
     d.className = 'prod' + (curProduct===p.id ? ' sel':'');
-    d.innerHTML = `${p.name} <span class="n">${p.key_count} keys</span>`;
+    d.appendChild(document.createTextNode(`${p.name} `));
+    const count = document.createElement('span');
+    count.className = 'n';
+    count.textContent = `${p.key_count} keys`;
+    d.appendChild(count);
     d.onclick = () => selectProduct(p);
     el.appendChild(d);
   });
@@ -168,7 +177,7 @@ async function selectProduct(p){
   $('#keysFor').textContent = p.slug;
   $('#keysCard').classList.remove('hide');
   $('#actCard').classList.add('hide');
-  $('#genResult').innerHTML = '';
+  $('#genResult').replaceChildren();
   await loadProducts();
   await loadKeys();
 }
@@ -191,29 +200,49 @@ $('#genkeys').onclick = async () => {
   try {
     const res = await api('POST',`/api/products/${curProduct}/keys`, body);
     $('#kcustom').value='';
-    $('#genResult').innerHTML =
-      `<div class="keys-warn"><b>${res.keys.length} key(s) generated — copy them now, they are not shown again.</b>
-       <textarea readonly>${res.keys.join('\n')}</textarea></div>`;
+    const warn = document.createElement('div');
+    warn.className = 'keys-warn';
+    const heading = document.createElement('b');
+    heading.textContent = `${res.keys.length} key(s) generated — copy them now, they are not shown again.`;
+    const textarea = document.createElement('textarea');
+    textarea.readOnly = true;
+    textarea.value = res.keys.join('\n');
+    warn.append(heading, textarea);
+    $('#genResult').replaceChildren(warn);
     await loadKeys(); setErr('');
   } catch(e){ setErr(e.message); }
 };
 
 async function loadKeys(){
   const keys = await api('GET',`/api/products/${curProduct}/keys`);
-  const tb = $('#keyrows'); tb.innerHTML='';
+  const tb = $('#keyrows'); tb.replaceChildren();
   keys.forEach(k => {
     const tr = document.createElement('tr');
     const st = k.status==='active' ? 'active':'revoked';
-    tr.innerHTML = `
-      <td class="mono">${k.prefix}</td>
-      <td>${k.seats_used}/${k.seat_limit}</td>
-      <td><span class="pill ${st}">${k.status}</span></td>
-      <td>${k.expires_at?fmt(k.expires_at):'never'}</td>
-      <td class="note">${k.note||''}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="ghost" data-act="${k.id}" style="padding:4px 10px;font-size:12px">Devices</button>
-        ${k.status==='active'?`<button class="danger" data-rev="${k.id}">Revoke</button>`:''}
-      </td>`;
+    const prefix = document.createElement('td');
+    prefix.className = 'mono'; prefix.textContent = k.prefix;
+    const seats = document.createElement('td');
+    seats.textContent = `${k.seats_used}/${k.seat_limit}`;
+    const status = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = `pill ${st}`; pill.textContent = k.status;
+    status.appendChild(pill);
+    const expiry = document.createElement('td');
+    expiry.textContent = k.expires_at ? fmt(k.expires_at) : 'never';
+    const note = document.createElement('td');
+    note.className = 'note'; note.textContent = k.note || '';
+    const actions = document.createElement('td');
+    actions.style.cssText = 'text-align:right;white-space:nowrap';
+    const devices = document.createElement('button');
+    devices.className = 'ghost'; devices.dataset.act = k.id;
+    devices.style.cssText = 'padding:4px 10px;font-size:12px'; devices.textContent = 'Devices';
+    actions.appendChild(devices);
+    if(k.status==='active'){
+      const revoke = document.createElement('button');
+      revoke.className = 'danger'; revoke.dataset.rev = k.id; revoke.textContent = 'Revoke';
+      actions.appendChild(revoke);
+    }
+    tr.append(prefix, seats, status, expiry, note, actions);
     tb.appendChild(tr);
   });
   tb.querySelectorAll('[data-rev]').forEach(b => b.onclick = async () => {
@@ -229,16 +258,35 @@ async function loadActivations(keyId, label){
   const acts = await api('GET',`/api/keys/${keyId}/activations`);
   $('#actFor').textContent = label;
   $('#actCard').classList.remove('hide');
-  const tb = $('#actrows'); tb.innerHTML='';
-  if(!acts.length) tb.innerHTML = '<tr><td colspan="7" class="note">No activations yet.</td></tr>';
+  const tb = $('#actrows'); tb.replaceChildren();
+  if(!acts.length){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7; td.className = 'note'; td.textContent = 'No activations yet.';
+    tr.appendChild(td); tb.appendChild(tr);
+  }
   acts.forEach(a => {
     const tr = document.createElement('tr');
     const st = a.status==='active'?'active':'revoked';
-    tr.innerHTML = `
-      <td>${a.os||'—'}</td><td>${a.hostname||'—'}</td><td>${a.app_version||'—'}</td>
-      <td>${fmt(a.activated_at)}</td><td>${fmt(a.last_seen)}</td>
-      <td><span class="pill ${st}">${a.status}</span></td>
-      <td style="text-align:right">${a.status==='active'?`<button class="danger" data-d="${a.id}">Revoke</button>`:''}</td>`;
+    const cell = (value, className) => {
+      const td = document.createElement('td');
+      if(className) td.className = className;
+      td.textContent = value || '—';
+      return td;
+    };
+    const status = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = `pill ${st}`; pill.textContent = a.status;
+    status.appendChild(pill);
+    const actions = document.createElement('td');
+    actions.style.textAlign = 'right';
+    if(a.status==='active'){
+      const revoke = document.createElement('button');
+      revoke.className = 'danger'; revoke.dataset.d = a.id; revoke.textContent = 'Revoke';
+      actions.appendChild(revoke);
+    }
+    tr.append(cell(a.os), cell(a.hostname), cell(a.app_version), cell(fmt(a.activated_at)),
+      cell(fmt(a.last_seen)), status, actions);
     tb.appendChild(tr);
   });
   tb.querySelectorAll('[data-d]').forEach(b => b.onclick = async () => {

@@ -53,6 +53,8 @@ def main():
     ap.add_argument("--fp", type=int, default=14)
     ap.add_argument("--per-sheet", type=int, default=12)
     a = ap.parse_args()
+    if a.cols < 1 or a.fp < 1 or a.per_sheet < 1:
+        ap.error("--cols, --fp, and --per-sheet must be at least 1")
 
     font = load_font(a.fp)
     lbl_font = load_font(16)
@@ -71,6 +73,10 @@ def main():
         tile.paste(bar, (0, 0))
         tile.paste(body, (0, bar.height))
         tiles.append(tile)
+
+    if not tiles:
+        print("No candidate frames found.")
+        return 1
 
     # uniform tile size
     tw = max(t.width for t in tiles); th = max(t.height for t in tiles)

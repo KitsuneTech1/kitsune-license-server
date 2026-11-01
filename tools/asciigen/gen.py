@@ -219,6 +219,11 @@ def main() -> int:
                     help="comma list: " + ",".join(PRESETS))
     args = ap.parse_args()
 
+    if args.width is not None and args.width < 1:
+        ap.error("--width must be at least 1")
+    if args.max_frames < 1:
+        ap.error("--max-frames must be at least 1")
+
     src_dir = Path(args.sources)
     out_dir = Path(args.out)
     frames_root = out_dir / "frames"
@@ -227,7 +232,7 @@ def main() -> int:
     frames_root.mkdir(parents=True, exist_ok=True)
 
     chosen = [PRESETS[n.strip()] for n in args.presets.split(",") if n.strip() in PRESETS]
-    if args.width:
+    if args.width is not None:
         chosen = [Preset(**{**p.__dict__, "width": args.width}) for p in chosen]
 
     exts = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp"}

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::config::now;
-use crate::crypto::{generate_license_key, hash_key, key_display_prefix};
+use crate::crypto::{canonicalize_key, generate_license_key, hash_key, key_display_prefix};
 use crate::error::AppError;
 use crate::models::{Activation, LicenseKey, Product, Shared};
 
@@ -75,6 +75,11 @@ pub async fn create_product(
         .map(|s| slugify(&s))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| slugify(&req.name));
+    if slug.is_empty() {
+        return Err(AppError::BadRequest(
+            "name or slug must contain a letter or digit".into(),
+        ));
+    }
     let res = sqlx::query("INSERT INTO products (slug, name, created_at) VALUES (?,?,?)")
         .bind(&slug)
         .bind(req.name.trim())
@@ -104,10 +109,11 @@ pub async fn list_products(
         .await?;
     let mut out = Vec::new();
     for p in products {
-        let (keys,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM license_keys WHERE product_id=?")
-            .bind(p.id)
-            .fetch_one(&st.pool)
-            .await?;
+        let (keys,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM license_keys WHERE product_id=?")
+                .bind(p.id)
+                .fetch_one(&st.pool)
+                .await?;
         out.push(json!({ "id": p.id, "slug": p.slug, "name": p.name,
             "created_at": p.created_at, "key_count": keys }));
     }
@@ -189,19 +195,47 @@ pub async fn generate_keys(
     }
 
     // resolve expiry: absolute wins, else now + days, else never
-    let expires_at = match (req.expires_at, req.expires_in_days) {
-        (Some(ts), _) => Some(ts),
-        (None, Some(d)) if d > 0 => Some(now() + d * 86_400),
-        _ => None,
-    };
+    let expires_at =
+        match (req.expires_at, req.expires_in_days) {
+            (Some(ts), _) => Some(ts),
+            (None, Some(d)) if d > 0 => {
+                let delta = d
+                    .checked_mul(86_400)
+                    .ok_or_else(|| AppError::BadRequest("expires_in_days is too large".into()))?;
+                Some(now().checked_add(delta).ok_or_else(|| {
+                    AppError::BadRequest("expiry is too far in the future".into())
+                })?)
+            }
+            (None, Some(d)) if d < 0 => {
+                return Err(AppError::BadRequest(
+                    "expires_in_days must be non-negative".into(),
+                ));
+            }
+            _ => None,
+        };
 
     // custom single key
-    if let Some(custom) = req.custom_key.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        if custom.len() < 6 {
+    if let Some(custom) = req
+        .custom_key
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        if canonicalize_key(custom).len() < 6 {
             return Err(AppError::BadRequest("custom_key too short".into()));
         }
-        insert_key(&st, product_id, custom, req.seat_limit, &req.note, expires_at).await?;
-        return Ok(Json(json!({ "count": 1, "keys": [custom], "expires_at": expires_at })));
+        insert_key(
+            &st,
+            product_id,
+            custom,
+            req.seat_limit,
+            &req.note,
+            expires_at,
+        )
+        .await?;
+        return Ok(Json(
+            json!({ "count": 1, "keys": [custom], "expires_at": expires_at }),
+        ));
     }
 
     if !(1..=1000).contains(&req.count) {
@@ -212,10 +246,11 @@ pub async fn generate_keys(
         // retry on the astronomically-unlikely hash collision
         let key = loop {
             let key = generate_license_key();
-            let dup: Option<(i64,)> = sqlx::query_as("SELECT id FROM license_keys WHERE key_hash=?")
-                .bind(hash_key(&key))
-                .fetch_optional(&st.pool)
-                .await?;
+            let dup: Option<(i64,)> =
+                sqlx::query_as("SELECT id FROM license_keys WHERE key_hash=?")
+                    .bind(hash_key(&key))
+                    .fetch_optional(&st.pool)
+                    .await?;
             if dup.is_none() {
                 break key;
             }
@@ -223,7 +258,9 @@ pub async fn generate_keys(
         insert_key(&st, product_id, &key, req.seat_limit, &req.note, expires_at).await?;
         issued.push(key);
     }
-    Ok(Json(json!({ "count": issued.len(), "keys": issued, "expires_at": expires_at })))
+    Ok(Json(
+        json!({ "count": issued.len(), "keys": issued, "expires_at": expires_at }),
+    ))
 }
 
 pub async fn list_keys(
