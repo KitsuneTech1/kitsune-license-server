@@ -128,6 +128,24 @@ pub fn verify_token(public_key_b64: &str, token: &str) -> Option<Vec<u8>> {
 fn license_from_token(cfg: &Config, token: &str, device: &str) -> Result<License, Error> {
     let payload = verify_token(&cfg.public_key, token).ok_or(Error::Verify)?;
     let c: Value = serde_json::from_slice(&payload).map_err(|e| Error::Bad(e.to_string()))?;
+    let now = now();
+    let token_exp = c["exp"]
+        .as_i64()
+        .ok_or_else(|| Error::Bad("token missing expiry".into()))?;
+    if now >= token_exp {
+        return Err(Error::Bad("token expired".into()));
+    }
+    let lic_exp = match c.get("lic_exp") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(
+            value
+                .as_i64()
+                .ok_or_else(|| Error::Bad("invalid license expiry".into()))?,
+        ),
+    };
+    if lic_exp.is_some_and(|expires| now >= expires) {
+        return Err(Error::Bad("license expired".into()));
+    }
     if c["device"].as_str() != Some(device) {
         return Err(Error::Bad("token device mismatch".into()));
     }
@@ -140,8 +158,8 @@ fn license_from_token(cfg: &Config, token: &str, device: &str) -> Result<License
         token: token.to_string(),
         product: c["product"].as_str().unwrap_or_default().to_string(),
         device: device.to_string(),
-        token_exp: c["exp"].as_i64().unwrap_or(0),
-        lic_exp: c["lic_exp"].as_i64(),
+        token_exp,
+        lic_exp,
     })
 }
 
@@ -222,6 +240,11 @@ pub fn load_license(cfg: &Config) -> Option<License> {
     serde_json::from_slice(&data).ok()
 }
 
+fn load_verified_license(cfg: &Config, device: &str) -> Option<License> {
+    let cached = load_license(cfg)?;
+    license_from_token(cfg, &cached.token, device).ok()
+}
+
 // ---------------------------------------------------------------------------
 // Guard — the continuous checker ("plugin").
 // ---------------------------------------------------------------------------
@@ -256,7 +279,8 @@ impl Guard {
     {
         // Seed from any cached license so we're entitled offline immediately,
         // unless the cached license has already expired.
-        let cached = load_license(&cfg);
+        let device = device_fingerprint(&cfg).unwrap_or_default();
+        let cached = load_verified_license(&cfg, &device);
         let mut cached_lic_exp = cached.as_ref().and_then(|l| l.lic_exp);
         let seed_active = match &cached {
             Some(l) => l.lic_exp.map(|e| now() < e).unwrap_or(true),
@@ -271,7 +295,6 @@ impl Guard {
         let st = state.clone();
         let grace_secs = grace.as_secs() as i64;
         let handle = std::thread::spawn(move || {
-            let device = device_fingerprint(&cfg).unwrap_or_default();
             let mut last_ok = if seed_active { now() } else { 0 };
             let mut prev = *st.status.lock().unwrap();
 
@@ -368,5 +391,82 @@ fn fill_random(buf: &mut [u8]) {
         x ^= x >> 7;
         x ^= x << 17;
         *b = (x & 0xff) as u8;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use data_encoding::BASE64URL_NOPAD;
+    use ed25519_dalek::{Signer, SigningKey};
+    use serde_json::json;
+
+    fn signed_token(key: &SigningKey, payload: Value) -> (String, String) {
+        let payload = payload.to_string().into_bytes();
+        let signature = key.sign(&payload);
+        let token = format!(
+            "{}.{}",
+            BASE64URL_NOPAD.encode(&payload),
+            BASE64URL_NOPAD.encode(&signature.to_bytes())
+        );
+        let public_key = BASE64URL_NOPAD.encode(key.verifying_key().as_bytes());
+        (token, public_key)
+    }
+
+    #[test]
+    fn expired_signed_token_is_rejected() {
+        let key = SigningKey::from_bytes(&[7; 32]);
+        let (token, public_key) = signed_token(
+            &key,
+            json!({
+                "device": "device-1",
+                "product": "demo",
+                "exp": now() - 1,
+                "lic_exp": null
+            }),
+        );
+        let cfg = Config::new("https://license.invalid", public_key);
+
+        let result = license_from_token(&cfg, &token, "device-1");
+
+        assert!(matches!(result, Err(Error::Bad(message)) if message == "token expired"));
+    }
+
+    #[test]
+    fn cached_license_must_still_have_a_valid_signature() {
+        let key = SigningKey::from_bytes(&[9; 32]);
+        let (token, public_key) = signed_token(
+            &key,
+            json!({
+                "device": "device-2",
+                "product": "demo",
+                "exp": now() + 3600,
+                "lic_exp": null
+            }),
+        );
+        let mut cfg = Config::new("https://license.invalid", public_key);
+        let dir = std::env::temp_dir().join(format!(
+            "kitsune_client_test_{}_{}",
+            std::process::id(),
+            now()
+        ));
+        cfg.config_dir = dir.clone();
+        let license = License {
+            token,
+            product: "demo".into(),
+            device: "device-2".into(),
+            token_exp: now() + 3600,
+            lic_exp: None,
+        };
+        save_license(&cfg, &license).unwrap();
+
+        assert!(load_verified_license(&cfg, "device-2").is_some());
+
+        let mut tampered = license;
+        tampered.token.push('x');
+        save_license(&cfg, &tampered).unwrap();
+        assert!(load_verified_license(&cfg, "device-2").is_none());
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
