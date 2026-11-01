@@ -31,6 +31,7 @@ impl Keys {
                 .as_slice()
                 .try_into()
                 .map_err(|_| anyhow!("key file {path:?} is not 32 bytes"))?;
+            restrict_key_permissions(path)?;
             Ok(Self { signing: SigningKey::from_bytes(&seed) })
         } else {
             let signing = SigningKey::generate(&mut OsRng);
@@ -39,6 +40,7 @@ impl Keys {
             }
             std::fs::write(path, signing.to_bytes())
                 .with_context(|| format!("writing {path:?}"))?;
+            restrict_key_permissions(path)?;
             Ok(Self { signing })
         }
     }
@@ -57,6 +59,22 @@ impl Keys {
             BASE64URL_NOPAD.encode(&sig.to_bytes())
         )
     }
+}
+
+/// Keep the signing seed readable only by the service account on Unix.
+/// Windows uses ACLs rather than POSIX mode bits, so this is intentionally a
+/// no-op there and the deployment account remains the authority boundary.
+fn restrict_key_permissions(path: &Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(path)?.permissions();
+        permissions.set_mode(0o600);
+        std::fs::set_permissions(path, permissions)?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 /// Verify a token against a base64url public key; returns the payload bytes.
@@ -153,6 +171,16 @@ mod tests {
         let a = Keys::load_or_generate(path.as_ref()).unwrap().public_key_b64();
         let b = Keys::load_or_generate(path.as_ref()).unwrap().public_key_b64();
         assert_eq!(a, b);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn persisted_key_is_owner_only() {
+        let path = TempPath::new("kls_private_key");
+        Keys::load_or_generate(path.as_ref()).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path.as_ref()).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 }
 

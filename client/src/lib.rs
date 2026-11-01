@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use data_encoding::{BASE64URL_NOPAD, HEXLOWER};
 use ed25519_dalek::{Signature, VerifyingKey};
+use rand::{rngs::OsRng, RngCore};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -55,10 +56,19 @@ impl Config {
             .ok()
             .map(PathBuf::from)
             .or_else(|| std::env::var("APPDATA").ok().map(PathBuf::from))
-            .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config")))
+            .or_else(|| {
+                std::env::var("HOME")
+                    .ok()
+                    .map(|h| PathBuf::from(h).join(".config"))
+            })
             .unwrap_or_else(|| PathBuf::from("."))
             .join("kitsune");
-        Self { server: server.into(), public_key: public_key.into(), product: None, config_dir }
+        Self {
+            server: server.into(),
+            public_key: public_key.into(),
+            product: None,
+            config_dir,
+        }
     }
 }
 
@@ -83,6 +93,8 @@ pub enum Status {
     InvalidKey,
     /// Couldn't reach/verify the server; running on cached state.
     Offline,
+    /// The offline grace window has elapsed without a successful check.
+    OfflineExpired,
     /// No check has completed yet.
     Unknown,
 }
@@ -173,7 +185,7 @@ pub fn device_fingerprint(cfg: &Config) -> std::io::Result<String> {
         }
     }
     let mut seed = [0u8; 16];
-    fill_random(&mut seed);
+    fill_random(&mut seed)?;
     let mut h = Sha256::new();
     h.update(seed);
     let id = HEXLOWER.encode(&h.finalize()[..16]);
@@ -202,7 +214,9 @@ pub fn activate(cfg: &Config, key: &str) -> Result<License, Error> {
         Err(e) => return Err(Error::Network(e.to_string())),
     };
     let v: Value = resp.into_json().map_err(|e| Error::Bad(e.to_string()))?;
-    let token = v["token"].as_str().ok_or_else(|| Error::Bad("no token".into()))?;
+    let token = v["token"]
+        .as_str()
+        .ok_or_else(|| Error::Bad("no token".into()))?;
     let lic = license_from_token(cfg, token, &device)?;
     save_license(cfg, &lic).ok();
     Ok(lic)
@@ -232,7 +246,10 @@ pub fn validate(cfg: &Config, key: &str, device: &str) -> Result<(Status, Option
 
 pub fn save_license(cfg: &Config, lic: &License) -> std::io::Result<()> {
     std::fs::create_dir_all(&cfg.config_dir)?;
-    std::fs::write(cfg.config_dir.join("license.json"), serde_json::to_vec_pretty(lic)?)
+    std::fs::write(
+        cfg.config_dir.join("license.json"),
+        serde_json::to_vec_pretty(lic)?,
+    )
 }
 
 pub fn load_license(cfg: &Config) -> Option<License> {
@@ -277,6 +294,7 @@ impl Guard {
     where
         F: Fn(Status) + Send + 'static,
     {
+        let interval = effective_interval(interval);
         // Seed from any cached license so we're entitled offline immediately,
         // unless the cached license has already expired.
         let device = device_fingerprint(&cfg).unwrap_or_default();
@@ -288,7 +306,11 @@ impl Guard {
         };
         let state = Arc::new(GuardState {
             active: AtomicBool::new(seed_active),
-            status: Mutex::new(if seed_active { Status::Offline } else { Status::Unknown }),
+            status: Mutex::new(if seed_active {
+                Status::Offline
+            } else {
+                Status::Unknown
+            }),
             stop: AtomicBool::new(false),
         });
 
@@ -327,7 +349,7 @@ impl Guard {
                     }
                     Ok((Status::Offline, _)) | Ok((Status::Unknown, _)) | Err(_) => {
                         if now() - last_ok > grace_secs {
-                            apply(&st, false, Status::Offline, &mut prev);
+                            apply(&st, false, Status::OfflineExpired, &mut prev);
                         } // else keep the previous entitlement
                     }
                     Ok((bad, _)) => apply(&st, false, bad, &mut prev),
@@ -336,7 +358,10 @@ impl Guard {
             }
         });
 
-        Guard { state, handle: Some(handle) }
+        Guard {
+            state,
+            handle: Some(handle),
+        }
     }
 
     /// May the program run right now?
@@ -379,19 +404,15 @@ fn sleep_interruptible(total: Duration, stop: &AtomicBool) {
     }
 }
 
-/// Non-cryptographic per-install nonce source (the value is hashed afterwards).
-fn fill_random(buf: &mut [u8]) {
-    let mut x = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0x9e3779b97f4a7c15)
-        ^ (buf.as_ptr() as u64);
-    for b in buf.iter_mut() {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        *b = (x & 0xff) as u8;
-    }
+fn effective_interval(interval: Duration) -> Duration {
+    interval.max(Duration::from_secs(1))
+}
+
+/// Fill a per-install nonce using the operating system's CSPRNG.
+fn fill_random(buf: &mut [u8]) -> std::io::Result<()> {
+    OsRng
+        .try_fill_bytes(buf)
+        .map_err(|e| std::io::Error::other(e.to_string()))
 }
 
 #[cfg(test)]
@@ -467,6 +488,40 @@ mod tests {
         save_license(&cfg, &tampered).unwrap();
         assert!(load_verified_license(&cfg, "device-2").is_none());
 
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn expired_offline_grace_is_not_entitled() {
+        assert!(Status::Offline.is_entitled());
+        assert!(!Status::OfflineExpired.is_entitled());
+    }
+
+    #[test]
+    fn zero_guard_interval_is_clamped() {
+        assert_eq!(effective_interval(Duration::ZERO), Duration::from_secs(1));
+        assert_eq!(
+            effective_interval(Duration::from_secs(5)),
+            Duration::from_secs(5)
+        );
+    }
+
+    #[test]
+    fn device_fingerprint_is_stable() {
+        let dir = std::env::temp_dir().join(format!(
+            "kitsune_client_device_test_{}_{}",
+            std::process::id(),
+            now()
+        ));
+        let mut cfg = Config::new("https://license.invalid", "not-used");
+        cfg.config_dir = dir.clone();
+
+        let first = device_fingerprint(&cfg).unwrap();
+        let second = device_fingerprint(&cfg).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 32);
+        assert!(first.bytes().all(|b| b.is_ascii_hexdigit()));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

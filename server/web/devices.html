@@ -49,7 +49,7 @@ $('#key').addEventListener('keydown',e=>{ if(e.key==='Enter') load(); });
 if($('#key').value) load();
 
 async function load(){
-  $('#err').textContent=''; $('#out').innerHTML='';
+  $('#err').textContent=''; $('#out').replaceChildren();
   const key=$('#key').value.trim(); if(!key) return;
   let d;
   try{
@@ -58,21 +58,49 @@ async function load(){
     if(!r.ok) throw new Error(d.message||'lookup failed');
   }catch(e){ $('#err').textContent=e.message; return; }
   const exp = d.expires_at ? fmt(d.expires_at) : 'never';
-  let rows = (d.devices||[]).map(a=>`<tr>
-      <td>${a.os||'—'}</td><td>${a.hostname||'—'}</td><td>${a.app_version||'—'}</td>
-      <td>${fmt(a.activated_at)}</td><td>${fmt(a.last_seen)}</td>
-      <td><span class="pill ${a.status==='active'?'active':'revoked'}">${a.status}</span></td>
-    </tr>`).join('');
-  if(!rows) rows='<tr><td colspan="6" class="note">No devices activated yet.</td></tr>';
-  $('#out').innerHTML=`
-    <div class="meta">
-      <div>Product<b>${d.product}</b></div>
-      <div>Seats<b>${d.seats_used}/${d.seat_limit}</b></div>
-      <div>License<b>${d.key_status}</b></div>
-      <div>Expires<b style="font-size:14px">${exp}</b></div>
-    </div>
-    <table><thead><tr><th>OS</th><th>Hostname</th><th>Version</th><th>Activated</th><th>Last seen</th><th>Status</th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
+  const out = $('#out');
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const metaItem = (label, value, small=false) => {
+    const div = document.createElement('div');
+    const name = document.createTextNode(`${label}`);
+    const b = document.createElement('b'); b.textContent = value;
+    if(small) b.style.fontSize = '14px';
+    div.append(name, b); return div;
+  };
+  meta.append(
+    metaItem('Product', d.product),
+    metaItem('Seats', `${d.seats_used}/${d.seat_limit}`),
+    metaItem('License', d.key_status),
+    metaItem('Expires', exp, true)
+  );
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const header = document.createElement('tr');
+  ['OS','Hostname','Version','Activated','Last seen','Status'].forEach(label => {
+    const th = document.createElement('th'); th.textContent = label; header.appendChild(th);
+  });
+  thead.appendChild(header);
+  const tbody = document.createElement('tbody');
+  const devices = d.devices || [];
+  if(!devices.length){
+    const tr = document.createElement('tr'); const td = document.createElement('td');
+    td.colSpan = 6; td.className = 'note'; td.textContent = 'No devices activated yet.';
+    tr.appendChild(td); tbody.appendChild(tr);
+  }
+  devices.forEach(a => {
+    const tr = document.createElement('tr');
+    const cell = value => { const td = document.createElement('td'); td.textContent = value || '—'; return td; };
+    const status = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = `pill ${a.status==='active'?'active':'revoked'}`; pill.textContent = a.status;
+    status.appendChild(pill);
+    tr.append(cell(a.os), cell(a.hostname), cell(a.app_version), cell(fmt(a.activated_at)),
+      cell(fmt(a.last_seen)), status);
+    tbody.appendChild(tr);
+  });
+  table.append(thead, tbody);
+  out.append(meta, table);
 }
 </script>
 </body>
