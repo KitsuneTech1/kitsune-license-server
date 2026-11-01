@@ -1,8 +1,8 @@
 <p align="center"><a href="https://kitsunetechnologies.org/work"><img src="https://raw.githubusercontent.com/KitsuneTech1/.github/main/assets/kitsune-banner.svg" alt="Built by Kitsune Technologies" width="760"></a></p>
 
-# Kitsune License Server
+# License Keeper
 
-Self-hosted software licensing: Ed25519-signed activation tokens, SQLite, an admin web UI, and a terminal activator with an animated ASCII mascot.
+A self-hosted software licensing server (repo: `kitsune-license-server`). Ed25519-signed activation tokens, SQLite, an admin web UI, and a terminal activator with an animated ASCII mascot.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
